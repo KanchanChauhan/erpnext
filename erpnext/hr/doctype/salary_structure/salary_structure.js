@@ -9,23 +9,23 @@ cur_frm.cscript.onload = function(doc, dt, dn){
 	e_tbl = doc.earnings || [];
 	d_tbl = doc.deductions || [];
 	if (e_tbl.length == 0 && d_tbl.length == 0)
-		return $c_obj(doc,'make_earn_ded_table','', function(r, rt) { refresh_many(['earnings', 'deductions']);});
+		return function(r, rt) { refresh_many(['earnings', 'deductions']);};
 }
 
-cur_frm.cscript.refresh = function(doc, dt, dn){
-	if((!doc.__islocal) && (doc.is_active == 'Yes') && cint(doc.salary_slip_based_on_timesheet == 0)){
-		cur_frm.add_custom_button(__('Salary Slip'),
-			cur_frm.cscript['Make Salary Slip'], __("Make"));
-		cur_frm.page.set_inner_btn_group_as_primary(__("Make"));
-	}
-}
+// cur_frm.cscript.refresh = function(doc, dt, dn){
+// 	if((!doc.__islocal) && (doc.is_active == 'Yes') && cint(doc.salary_slip_based_on_timesheet == 0)){
+// 		cur_frm.add_custom_button(__('Salary Slip'),
+// 			cur_frm.cscript['Make Salary Slip'], __("Make"));
+// 		cur_frm.page.set_inner_btn_group_as_primary(__("Make"));
+// 	}
+// }
 
 frappe.ui.form.on('Salary Structure', {
 	refresh: function(frm) {
 		frm.trigger("toggle_fields")
 		frm.fields_dict['earnings'].grid.set_column_disp("default_amount", false);
 		frm.fields_dict['deductions'].grid.set_column_disp("default_amount", false);
-	},
+		},	
 
 	salary_slip_based_on_timesheet: function(frm) {
 		frm.trigger("toggle_fields")
@@ -42,11 +42,6 @@ cur_frm.cscript['Make Salary Slip'] = function() {
 		method: "erpnext.hr.doctype.salary_structure.salary_structure.make_salary_slip",
 		frm: cur_frm
 	});
-}
-
-cur_frm.cscript.employee = function(doc, dt, dn){
-	if (doc.employee)
-		return get_server_fields('get_employee_details','','',doc,dt,dn);
 }
 
 cur_frm.cscript.amount = function(doc, cdt, cdn){
@@ -79,10 +74,6 @@ cur_frm.cscript.validate = function(doc, cdt, cdn) {
 	if(doc.employee && doc.is_active == "Yes") frappe.model.clear_doc("Employee", doc.employee);
 }
 
-cur_frm.fields_dict.employee.get_query = function(doc,cdt,cdn) {
-	return{ query: "erpnext.controllers.queries.employee_query" }
-}
-
 
 frappe.ui.form.on('Salary Detail', {
 	amount: function(frm) {
@@ -97,3 +88,28 @@ frappe.ui.form.on('Salary Detail', {
 		calculate_totals(frm.doc);
 	}
 })
+
+frappe.ui.form.on('Salary Structure Employee', {
+	onload: function(frm) {
+		frm.set_query("employee","employees", function(doc,cdt,cdn) {
+			return{ query: "erpnext.controllers.queries.employee_query" }
+		})
+	},
+	preview_salary_slip: function(frm) {
+		frappe.call({
+			method: 'erpnext.hr.doctype.salary_structure.salary_structure.make_salary_slip',
+			args: {
+				source_name: frm.doc.name,
+				employee: frm.doc.employees[0].employee,
+				as_print: 1
+			},
+			callback: function(r) {
+				frappe.msgprint(r.message);
+				// show preview in a new tab
+				// var new_window = window.open();
+				// new_window.document.write(r.message);
+				// new_window.close();
+			}
+		})
+	}
+});

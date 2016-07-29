@@ -188,7 +188,6 @@ def make_salary_structure(source_name, target=None):
 			}
 		}
 	})
-	target.make_earn_ded_table()
 	return target
 
 def validate_employee_role(doc, method):

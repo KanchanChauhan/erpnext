@@ -24,7 +24,9 @@ frappe.ui.form.on("Salary Slip", {
 
 	refresh: function(frm) {
 		frm.trigger("toggle_fields")
-	},
+		// frm.fields_dict['earnings'].grid.set_column_disp(["default_amount", "formula", "condition", "amount_based_on_formula", "abbr"], false);
+		// frm.fields_dict['deductions'].grid.set_column_disp(["default_amount", "formula", "condition", "amount_based_on_formula", "abbr"], false);
+	},	
 
 	salary_slip_based_on_timesheet: function(frm) {
 		frm.trigger("toggle_fields")
