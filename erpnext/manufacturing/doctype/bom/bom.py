@@ -42,15 +42,14 @@ class BOM(WebsiteGenerator):
 
 	def validate(self):
 		self.route = frappe.scrub(self.name).replace('_', '-')
-		self.clear_operations()
 		self.validate_main_item()
 		self.validate_currency()
 		self.set_conversion_rate()
 		self.validate_uom_is_interger()
 		self.update_stock_qty()
+		self.sort_items_on_operation()
 		self.set_bom_material_details()
 		self.validate_materials()
-		self.validate_operations()
 		self.calculate_cost()
 
 	def get_context(self, context):
@@ -248,10 +247,6 @@ class BOM(WebsiteGenerator):
 				item.default_bom = None
 				item.save(ignore_permissions = True)
 
-	def clear_operations(self):
-		if not self.with_operations:
-			self.set('operations', [])
-
 	def validate_main_item(self):
 		""" Validate main FG item"""
 		item = self.get_item_det(self.item)
@@ -369,29 +364,10 @@ class BOM(WebsiteGenerator):
 
 	def calculate_cost(self):
 		"""Calculate bom totals"""
-		self.calculate_op_cost()
 		self.calculate_rm_cost()
 		self.calculate_sm_cost()
-		self.total_cost = self.operating_cost + self.raw_material_cost - self.scrap_material_cost
-		self.base_total_cost = self.base_operating_cost + self.base_raw_material_cost - self.base_scrap_material_cost
-
-	def calculate_op_cost(self):
-		"""Update workstation rate and calculates totals"""
-		self.operating_cost = 0
-		self.base_operating_cost = 0
-		for d in self.get('operations'):
-			if d.workstation:
-				if not d.hour_rate:
-					hour_rate = flt(frappe.db.get_value("Workstation", d.workstation, "hour_rate"))
-					d.hour_rate = hour_rate / flt(self.conversion_rate) if self.conversion_rate else hour_rate
-
-			if d.hour_rate and d.time_in_mins:
-				d.base_hour_rate = flt(d.hour_rate) * flt(self.conversion_rate)
-				d.operating_cost = flt(d.hour_rate) * flt(d.time_in_mins) / 60.0
-				d.base_operating_cost = flt(d.operating_cost) * flt(self.conversion_rate)
-
-			self.operating_cost += flt(d.operating_cost)
-			self.base_operating_cost += flt(d.base_operating_cost)
+		self.total_cost = self.raw_material_cost - self.scrap_material_cost
+		self.base_total_cost = self.base_raw_material_cost - self.base_scrap_material_cost
 
 	def calculate_rm_cost(self):
 		"""Fetch RM rate as per today's valuation rate and calculate totals"""
@@ -447,7 +423,13 @@ class BOM(WebsiteGenerator):
 					'stock_uom'		: d.stock_uom,
 					'stock_qty'		: flt(d.stock_qty),
 					'rate'			: d.base_rate,
+					'routing_link_code': d.routing_link_code,
+					'operation'		: d.operation
 				}))
+
+	def sort_items_on_operation(self):
+		for i, item in enumerate(sorted(self.items, key=lambda item: item.operation), start=1):
+			item.idx = i
 
 	def company_currency(self):
 		return erpnext.get_company_currency(self.company)
@@ -462,7 +444,7 @@ class BOM(WebsiteGenerator):
 		""" Add all items from Flat BOM of child BOM"""
 		# Did not use qty_consumed_per_unit in the query, as it leads to rounding loss
 		child_fb_items = frappe.db.sql("""select bom_item.item_code, bom_item.item_name,
-			bom_item.description, bom_item.source_warehouse,
+			bom_item.description, bom_item.source_warehouse, bom_item.routing_link_code,
 			bom_item.stock_uom, bom_item.stock_qty, bom_item.rate,
 			bom_item.stock_qty / ifnull(bom.quantity, 1) as qty_consumed_per_unit
 			from `tabBOM Explosion Item` bom_item, tabBOM bom
@@ -474,6 +456,8 @@ class BOM(WebsiteGenerator):
 				'item_name'				: d['item_name'],
 				'source_warehouse'		: d['source_warehouse'],
 				'description'			: d['description'],
+				'routing_link_code'		: d['routing_link_code'] or '',
+				'operation'				: d['operation'] or '',
 				'stock_uom'				: d['stock_uom'],
 				'stock_qty'				: d['qty_consumed_per_unit'] * stock_qty,
 				'rate'					: flt(d['rate']),
@@ -503,15 +487,6 @@ class BOM(WebsiteGenerator):
 			if act_pbom and act_pbom[0][0]:
 				frappe.throw(_("Cannot deactivate or cancel BOM as it is linked with other BOMs"))
 
-	def validate_operations(self):
-		if self.with_operations and not self.get('operations'):
-			frappe.throw(_("Operations cannot be left blank"))
-
-		if self.with_operations:
-			for d in self.operations:
-				if not d.description:
-					d.description = frappe.db.get_value('Operation', d.operation, 'description')
-
 def get_list_context(context):
 	context.title = _("Bill of Materials")
 	# context.introduction = _('Boms')
@@ -529,6 +504,8 @@ def get_bom_items_as_dict(bom, company, qty=1, fetch_exploded=1, fetch_scrap_ite
 				item.image,
 				item.stock_uom,
 				item.default_warehouse,
+				bom_item.routing_link_code,
+				bom_item.operation,
 				item.expense_account as expense_account,
 				item.buying_cost_center as cost_center
 				{select_columns}
@@ -632,3 +609,7 @@ def get_boms_in_bottom_up_order(bom_no=None):
 		count += 1
 
 	return bom_list
+
+@frappe.whitelist()
+def routing_link_code_query(doctype, txt, searchfield, start, page_len, filters):
+	return frappe.db.get_values('Routing Details', {'parent':filters.get("routing")},'routing_link_code')
