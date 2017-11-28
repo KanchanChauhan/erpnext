@@ -12,11 +12,11 @@ from erpnext.assets.doctype.asset.asset import make_sales_invoice, make_purchase
 class TestAsset(unittest.TestCase):
 	def setUp(self):
 		set_depreciation_settings_in_company()
-		create_asset()
 		frappe.db.sql("delete from `tabTax Rule`")
 
 	def test_purchase_asset(self):
-		asset = frappe.get_doc("Asset", "Macbook Pro 1")
+		create_asset("Macbook_1")
+		asset = frappe.get_doc("Asset", "Macbook_1")
 		asset.submit()
 		
 		pi = make_purchase_invoice(asset.name, asset.item_code, asset.gross_purchase_amount,
@@ -52,7 +52,8 @@ class TestAsset(unittest.TestCase):
 		
 
 	def test_schedule_for_straight_line_method(self):
-		asset = frappe.get_doc("Asset", "Macbook Pro 1")
+		create_asset("Macbook_2")
+		asset = frappe.get_doc("Asset", "Macbook_2")
 
 		self.assertEqual(asset.status, "Draft")
 
@@ -68,7 +69,8 @@ class TestAsset(unittest.TestCase):
 		self.assertEqual(schedules, expected_schedules)
 		
 	def test_schedule_for_straight_line_method_for_existing_asset(self):
-		asset = frappe.get_doc("Asset", "Macbook Pro 1")
+		create_asset("Macbook_3")
+		asset = frappe.get_doc("Asset", "Macbook_3")
 		asset.is_existing_asset = 1
 		asset.number_of_depreciations_booked = 1
 		asset.opening_accumulated_depreciation = 40000
@@ -88,7 +90,8 @@ class TestAsset(unittest.TestCase):
 
 
 	def test_schedule_for_double_declining_method(self):
-		asset = frappe.get_doc("Asset", "Macbook Pro 1")
+		create_asset("Macbook_4")
+		asset = frappe.get_doc("Asset", "Macbook_4")
 		asset.depreciation_method = "Double Declining Balance"
 		asset.save()
 
@@ -104,7 +107,8 @@ class TestAsset(unittest.TestCase):
 		self.assertEqual(schedules, expected_schedules)
 		
 	def test_schedule_for_double_declining_method_for_existing_asset(self):
-		asset = frappe.get_doc("Asset", "Macbook Pro 1")
+		create_asset("Macbook_5")
+		asset = frappe.get_doc("Asset", "Macbook_5")
 		asset.depreciation_method = "Double Declining Balance"
 		asset.is_existing_asset = 1
 		asset.number_of_depreciations_booked = 1
@@ -122,7 +126,8 @@ class TestAsset(unittest.TestCase):
 		self.assertEqual(schedules, expected_schedules)
 		
 	def test_schedule_for_manual_method(self):
-		asset = frappe.get_doc("Asset", "Macbook Pro 1")
+		create_asset("Macbook_6")
+		asset = frappe.get_doc("Asset", "Macbook_6")
 		asset.depreciation_method = "Manual"
 		asset.schedules = []
 		for schedule_date, amount in [["2020-12-31", 40000], ["2021-06-30", 30000], ["2021-10-31", 20000]]:
@@ -146,7 +151,8 @@ class TestAsset(unittest.TestCase):
 		self.assertEqual(schedules, expected_schedules)
 
 	def test_depreciation(self):
-		asset = frappe.get_doc("Asset", "Macbook Pro 1")
+		create_asset("Macbook_7")
+		asset = frappe.get_doc("Asset", "Macbook_7")
 		asset.submit()
 		asset.load_from_db()
 		self.assertEqual(asset.status, "Submitted")
@@ -174,7 +180,8 @@ class TestAsset(unittest.TestCase):
 		self.assertEqual(asset.get("value_after_depreciation"), 70000)
 		
 	def test_depreciation_entry_cancellation(self):
-		asset = frappe.get_doc("Asset", "Macbook Pro 1")
+		create_asset("Macbook_8")
+		asset = frappe.get_doc("Asset", "Macbook_8")
 		asset.submit()
 		post_depreciation_entries(date="2021-01-01")
 		
@@ -191,11 +198,12 @@ class TestAsset(unittest.TestCase):
 		
 
 	def test_scrap_asset(self):
-		asset = frappe.get_doc("Asset", "Macbook Pro 1")
+		create_asset("Macbook_9")
+		asset = frappe.get_doc("Asset", "Macbook_9")
 		asset.submit()
 		post_depreciation_entries(date="2021-01-01")
 
-		scrap_asset("Macbook Pro 1")
+		scrap_asset("Macbook_9")
 
 		asset.load_from_db()
 		self.assertEqual(asset.status, "Scrapped")
@@ -213,44 +221,45 @@ class TestAsset(unittest.TestCase):
 
 		self.assertEqual(gle, expected_gle)
 
-		restore_asset("Macbook Pro 1")
+		restore_asset("Macbook_9")
 
 		asset.load_from_db()
 		self.assertFalse(asset.journal_entry_for_scrap)
 		self.assertEqual(asset.status, "Partially Depreciated")
 
 	def test_asset_sale(self):
-		frappe.get_doc("Asset", "Macbook Pro 1").submit()
+		create_asset("Macbook_10")
+		asset = frappe.get_doc("Asset", "Macbook_10").submit()
 		post_depreciation_entries(date="2021-01-01")
 
-		si = make_sales_invoice(asset="Macbook Pro 1", item_code="Macbook Pro", company="_Test Company")
+		si = make_sales_invoice(asset="Macbook_10", item_code="Macbook_10", company="_Test Company")
 		si.customer = "_Test Customer"
 		si.due_date = nowdate()
 		si.get("items")[0].rate = 25000
 		si.insert()
 		si.submit()
 
-		self.assertEqual(frappe.db.get_value("Asset", "Macbook Pro 1", "status"), "Sold")
+		self.assertEqual(frappe.db.get_value("Asset", "Macbook_10", "status"), "Sold")
 
 		expected_gle = (
-			("_Test Accumulated Depreciations - _TC", 30000.0, 0.0),
-			("_Test Fixed Asset - _TC", 0.0, 100000.0),
-			("_Test Gain/Loss on Asset Disposal - _TC", 45000.0, 0.0),
-			("Debtors - _TC", 25000.0, 0.0)
+			('_Test Accumulated Depreciations - _TC', 30000.0, 0.0), 
+			('_Test Depreciations - _TC', 70000.0, 0.0), 
+			('_Test Fixed Asset - _TC', 0.0, 100000.0), 
+			('_Test Gain/Loss on Asset Disposal - _TC', 0.0, 25000.0), 
+			('Debtors - _TC', 25000.0, 0.0)
 		)
 
 		gle = frappe.db.sql("""select account, debit, credit from `tabGL Entry`
 			where voucher_type='Sales Invoice' and voucher_no = %s
 			order by account""", si.name)
-
 		self.assertEqual(gle, expected_gle)
 
 		si.cancel()
-
-		self.assertEqual(frappe.db.get_value("Asset", "Macbook Pro 1", "status"), "Partially Depreciated")
+		self.assertEqual(frappe.db.get_value("Asset", "Macbook_10", "status"), "Partially Depreciated")
 
 	def test_asset_expected_value_after_useful_life(self):
-		asset = frappe.get_doc("Asset", "Macbook Pro 1")
+		create_asset("Macbook_11")
+		asset = frappe.get_doc("Asset", "Macbook_11")
 		asset.depreciation_method = "Straight Line"
 		asset.is_existing_asset = 1
 		asset.total_number_of_depreciations = 400
@@ -266,34 +275,25 @@ class TestAsset(unittest.TestCase):
 
 		self.assertTrue(asset.expected_value_after_useful_life >= asset_value_after_full_schedule)
 
-	def tearDown(self):
-		asset = frappe.get_doc("Asset", "Macbook Pro 1")
-
-		if asset.docstatus == 1 and asset.status not in ("Scrapped", "Sold", "Draft", "Cancelled"):
-			asset.cancel()
-
-			self.assertEqual(frappe.db.get_value("Asset", "Macbook Pro 1", "status"), "Cancelled")
-
-		frappe.delete_doc("Asset", "Macbook Pro 1")
-
-def create_asset():
+def create_asset(item_name):
 	if not frappe.db.exists("Asset Category", "Computers"):
 		create_asset_category()
 
-	if not frappe.db.exists("Item", "Macbook Pro"):
-		create_fixed_asset_item()
+	if not frappe.db.exists("Item", item_name):
+		create_fixed_asset_item(item_name)
 	
 	asset = frappe.get_doc({
 		"doctype": "Asset",
-		"asset_name": "Macbook Pro 1",
+		"asset_name": item_name,
 		"asset_category": "Computers",
-		"item_code": "Macbook Pro",
+		"item_code": item_name,
 		"company": "_Test Company",
 		"purchase_date": "2015-01-01",
 		"next_depreciation_date": "2020-12-31",
 		"gross_purchase_amount": 100000,
 		"expected_value_after_useful_life": 10000,
-		"warehouse": "_Test Warehouse - _TC"
+		"warehouse": "_Test Warehouse - _TC",
+		"asset_owner": "Company"
 	})
 	try:
 		asset.save()
@@ -315,13 +315,13 @@ def create_asset_category():
 	})
 	asset_category.insert()
 
-def create_fixed_asset_item():
+def create_fixed_asset_item(item_name):
 	try:
 		frappe.get_doc({
 			"doctype": "Item",
-			"item_code": "Macbook Pro",
-			"item_name": "Macbook Pro",
-			"description": "Macbook Pro Retina Display",
+			"item_code": item_name,
+			"item_name": item_name,
+			"description": item_name,
 			"asset_category": "Computers",
 			"item_group": "All Item Groups",
 			"stock_uom": "Nos",
